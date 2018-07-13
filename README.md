@@ -1,2 +1,2 @@
 # BLE-Tester
-A Python based application to test BLE devices. This will auto discover devices and have the ability to connect to the discovered devices and read from them. This application has a simple UI.
+A Python based application to test BLE devices. This will automatically discover devices and has the ability to connect to and read from any device labeled 'Petasense Mote.’ This application has a simple GUI. 
