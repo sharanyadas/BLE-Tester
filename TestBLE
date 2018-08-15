@@ -1,0 +1,232 @@
+##############
+#REFERENCE
+##############
+#https://en.wikiversity.org/wiki/Python_Concepts/Strings
+#https://docs.python.org/2/library/subprocess.html
+#https://www.python-course.eu/tkinter_checkboxes.php
+#https://stackoverflow.com/questions/11490469/how-to-create-a-button-to-select-all-checkbuttons#
+#http://www.pythonforbeginners.com/systems-programming/how-to-use-the-pexpect-module-in-python
+#https://www.youtube.com/channel/UCQSzh26jxg5an96psvzlsPw/videos5
+##############
+#import stuff for UI
+##############
+#DEBUGGING NOTE :
+#    Occassionally that the hcitool, gatttool, bluetoothctl tools do not work and fail
+#    to connect. To fix that problem I could do the following things:
+#        1. From VM Menu toggle (unselect/select) Device-->USB-->Line on Technology 
+#        2. If #1 does not work... from the console I did the following:
+#           $hciconfig hci0 down
+#           $hciconfig hci0 up
+#        3. When #2 also failed... I went to Windows bluetooth config and disabled/re-enabled it.
+####################################
+
+from Tkinter import *
+
+root = Tk()
+
+root.title('BLE Tester Application')
+root.geometry("500x500")
+
+##############
+#import stuff for subprocess etc
+##############
+
+import subprocess
+import os
+import signal
+import time
+import pexpect
+import re
+
+##############
+#Discover BLE devices, identify Mote devices and store them in variable
+##############
+
+kill = lambda process: process.kill()
+cmd = 'hcitool lescan'
+
+print "Starting hcitool lescan to discover all BLE devices..."
+process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+time.sleep(15)
+os.kill(process.pid, signal.SIGINT)
+out = process.communicate()[0]
+#print out             #print what I discovered through lescan
+
+print "Searching for Mote devices (max 10) from discovered list ..."
+mote = []
+maclist = []
+rssi_arr = []
+for line in out.split('\n'):
+    if 'Mote' in line:
+        mote.append(line)
+        maclist.append(line.split()[0])
+        rssi_arr.append(200)  # Don't know rssi yet. Initialize with 200
+    if len(mote) > 10: # there may be hundereds of devices... testing for the first 10 discovred Mote
+        break;
+
+######TEST WITHOUT MOTE ====== I NEED TO REMOVE THESE motes and hard coded macaddresses
+mote = ['00:07:80:39:77:EA  Petasense Mote 1   RSSI = ',
+        '00:07:80:39:77:EB  Petasense Mote 2   RSSI = ',
+        '00:07:80:39:77:EC  Petasense Mote 3   RSSI = ',
+        '00:07:80:39:77:ED  Petasense Mote 4   RSSI = ']
+maclist = ['00:07:80:39:77:EA',
+         '00:07:80:39:77:EB',
+         '00:07:80:39:77:EC',
+         '00:07:80:39:77:ED']
+rssi_arr = [200,200,200,200]  # Don't know rssi yet. Initialize with a high number 200
+###### I WILL REMOVE UPTO HERE
+
+###############
+## Use "bluetoothctl" tool to scan again and read the RSSI for the previously discovered mote.
+## This is needed as previous "hcitool lescan" does not give RSSI
+###############
+print "Finding the RSSI for the Mote devices using bluetoothctl tool..."
+ch=pexpect.spawn('bluetoothctl', timeout=60)
+ch.expect('#')
+for i, mac in enumerate(maclist):
+     ch.sendline('scan on')
+     mrstr=mac+" RSSI: "
+     try:
+           ch.expect(mrstr+r"(-)?[0-9]*", timeout=10)
+           #print ch.before
+           #print ch.after
+           #print ch.after.split()[2]  # this is RSSI !!
+           rssi_arr [i] = int(ch.after.split()[2])
+           print "GOT the RSSI for this MAC = ", mac, rssi_arr[i]
+     except pexpect.TIMEOUT:
+           print "Oops! Could NOT get the RSSI for this MAC = ", mac
+     ch.sendline('scan off')
+#ch.kill()   #Not sure if I need to kill the child process?
+ch.sendline('exit')
+
+#print (mote)   #print stdout of proc1 to display all the Mote lines
+#print "rssi_arr : ", rssi_arr
+
+##################################
+#      UI Processing
+##################################
+
+# Create an array of radio buttons for all discovered devices
+
+rbuts_text = mote   #Assign the Lines read from hcitool cmd
+rbuts = []
+chk_sel = IntVar()
+ix = 0
+
+#define the UI functions
+
+Label(root, text="## MAC address of Discovered Mote Devices ##",
+      font=('Helvetica', 11), bg="blue", fg="white").pack()
+Label(root, text=" \n").pack()  #blank line
+
+def create_rbuts():
+    global rssi_arr
+    for index, item in enumerate(mote):
+        num = rssi_arr[index]
+        macrssi = item+str(num)
+        #print "index = ", index, " mscrssi = ", macrssi
+        rbuts.append(Radiobutton(root, text=macrssi, variable=chk_sel,
+                                 value=index, command=rbut_cmd_action))
+        rbuts[index].pack()
+
+def rbut_cmd_action():
+   global ix
+   ix = chk_sel.get()
+   print "Selected Radio button number = ", ix
+   print "Selected MAC and RSSI ", maclist[ix], rssi_arr[ix]
+
+def deselect_all():
+    for i in rbuts:
+        i.deselect
+
+def connect_action():
+   print "### Reading using bluetoothctl for the device...", maclist[ix], rssi_arr[ix] 
+   try:
+         chdl=pexpect.spawn('bluetoothctl', timeout=60)
+         chdl.expect('#')
+         chdl.sendline('info ' + maclist[ix])
+         chdl.expect(r"([a-z0-9]*-[a-z0-9]*-[a-z0-9]*-[a-z0-9]*-[a-z0-9]*)")
+         #print chdl.before
+         #print chdl.after
+   except pexpect.TIMEOUT:
+         print "    Oops! could not read using bluetoothctl..."
+   chdl.sendline('exit')
+   print "### Connecting using gatttool to the device...", maclist[ix], rssi_arr[ix] 
+   try:
+        chdl1=pexpect.spawn('gatttool -I')
+        chdl1.expect('>') #Wait for [LE]> prompt
+        chdl1.sendline('connect ' + maclist[ix])
+        chdl1.expect('### Connection successful')
+        #print chdl1.before
+        #print chdl1.after
+   except pexpect.TIMEOUT:
+         print "    Oops! could not connect using gatttool..."
+   chdl1.sendline('exit')
+
+#This function will auto connect to least negetive RSSI device
+
+def auto_connect():
+   global rssi_arr
+   minrssi = min(rssi_arr)  #least integer value of RSSI
+   #print "rssi_arr : ", rssi_arr
+   minpos = rssi_arr.index(minrssi) # position of the minrssi
+   #print " minrssi  minpos : ", minrssi, minpos
+   print "\n#####  Auto connecting to the highest RSSI device with MAC and RSSI : ", maclist[minpos], rssi_arr[minpos]
+   print "   #####  Reading info using bluetoothctl "
+   try:
+        chdl=pexpect.spawn('bluetoothctl', timeout=60)
+        chdl.expect('#')
+        chdl.sendline('info ' + maclist[minpos])
+        chdl.expect(r"([a-z0-9]*-[a-z0-9]*-[a-z0-9]*-[a-z0-9]*-[a-z0-9]*)")
+        #print chdl.before
+        #print chdl.after
+   except pexpect.TIMEOUT:
+        print "       Oops! could not read using bluetoothctl..."
+   chdl.sendline('exit')
+   print "   #####  Connecting using gatttool... "
+   try:
+        ac_ch=pexpect.spawn('gatttool -I')
+        ac_ch.expect('>') #Wait for [LE]> prompt
+        ac_ch.sendline('connect ' + maclist[minpos])
+        ac_ch.expect('Connection successful', timeout = 60)
+        print('#####  Auto Connection successful')
+        #print ac_ch.before
+        #print ac_ch.after
+   except pexpect.TIMEOUT:
+        print "       Oops! could not connect using gatttool..."
+   ac_ch.sendline('exit')
+
+#Create buttons and list the discovered Mote devices and their MAC, RSSI etc
+print "Creating the main UI radio buttons and printing the Mote device name, MAC, RSSI"
+create_rbuts()
+deselect_all()
+
+Label(root, text=" \n\n").pack() #blank line
+Button(root, text = 'Connect to the selected Device MAC address',
+       bg="green", fg="yellow",
+       command=connect_action).pack()
+Label(root, text=" \n").pack() #blank line
+
+Label(root, text="Password: ").pack()
+### Here I can send the SSID and Password to BLE device. But I need to know from Simon 
+### the exact handle i.e where to write those
+e1 = Entry(root)
+e1.pack()
+
+Label(root, text="SSID: ").pack()
+### Here I can send the SSID and Password to BLE device. But I need to know from Simon 
+### the exact handle i.e where to write those
+e2 = Entry(root)
+e2.pack()
+
+Button(root, text = 'Apply', bg="blue", fg="white", command=root.quit).pack()
+### Here I can send the SSID and Password to BLE device. But I need to know from Simon 
+### the exact handle i.e where to write those
+Label(root, text=" \n\n").pack() #blank line
+
+Button(root, text='Quit', bg="red", fg="white", command=root.quit).pack()
+
+#Auto connect to the highest RSSI device i.e. least integer ivalue RSSI Mote dveice
+auto_connect()
+
+mainloop()
