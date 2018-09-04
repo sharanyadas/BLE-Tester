@@ -1,0 +1,101 @@
+Project goal 
+============
+1. Create a Python application (tkinter GUI is fine) that can connect from 
+   laptop's bluetooth (Bluetooth 4.0 or above) and read the device ID of nearby Petasense Mote
+2. The App should automatically connect to device labeled "Petasense Mote" with lowest RSSI,
+   read device ID, and be able to send the Bluetooth module an SSID and Password
+
+Solution:
+=========
+From windows machine or MacBook I could not get any of the following tools (e.g. gatttool, hcitool etc) working.
+Then I created an Ubuntu VM in a Windows machine and from that VM the Bluetooth device appeared as a USB
+interface which was internally mapped to Windows Bluetooth. 
+
+
+Mainly 3 different tools were used:
+===================================
+1. hcitool
+2. gatttool
+3. bluetoothctl
+
+VM:
+===
+Download Virtual box and install [ VirtualBox-5.2.12-122591-Win]
+Download Ububntu ISO file [ubuntu-18.04-desktop-amd64]
+Create VM
+Select VDI
+Normal Start
+Do the network etc settings
+Setting-->Storage-->Disk .. click on small round icon and select the [ubuntu-18.04-desktop-amd64]
+Now install Ubuntu
+
+Python:
+======
+Install Python 2.7
+Install PyCharm
+
+#DEBUGGING NOTE :
+=================
+#    Sometimes I observed that the hcitool, gatttool, bluetoothctl tools did not work and failedee
+#    to connect! By searching internet I found some tricks that workd...
+#        1. From VM Menu toggle (unselect/select) Device-->USB-->Line on Technology 
+#        2. If #1 does not work... from console I did the following:
+#           $hciconfig hci0 down
+#           $hciconfig hci0 up
+#        3. When #2 also failed... I went to Windows bluetooth config and disabled/reenabled it.
+
+Online resource that I used:
+=============================
+https://www.youtube.com/watch?v=TwVebCE0bhd
+hciconfig : Used to configure Bluetooth devices
+hcitools : Used to configure/control Bluetooth connection
+gatttool: Used to acess services of Bluetooth LE devic
+bluepy-helper: Bluez python helper application
+bluepy: Python intrface to BLE in Linux
+https://en.wikiversity.org/wiki/Python_Concepts/Strings
+https://docs.python.org/2/library/subprocess.html
+https://www.python-course.eu/tkinter_checkboxes.php
+https://stackoverflow.com/questions/11490469/how-to-create-a-button-to-select-all-checkbuttons#
+http://www.pythonforbeginners.com/systems-programming/how-to-use-the-pexpect-module-in-python
+https://www.youtube.com/channel/UCQSzh26jxg5an96psvzlsPw/videos5
+
+
+Other SW that I installed for experiemnt:
+=========================================
+
+Read http://christopherpeplin.com/2015/10/22/pygatt-python-bluetooth-low-energy-ble/ and https://github.com/peplin/pygatt
+Download pygatt
+set path:
+  System-->Advance setting--> System Env variable--> edit "path" and add c:\Python27
+Download and Install pip
+  Go to https://dev.to/el_joft/installing-pip-on-windows
+  Download C:\Users\sharanya\Downloads\get-pip.py
+  Run "python C:\Users\sharanya\Downloads\get-pip.py" from CMD prompt
+
+
+$apt-cache search pygatt
+$apt-cache search bluez
+$sudo apt-get install bluez
+$dmesg
+$hcitool
+$sudo apt-get install python-pexpect
+https://www.pythonforbeginners.com/modules/how-to-use-the-pexpect-module-in-python/
+
+
+hcitool and gattool commands
+============================
+$sudo hcitol lescan  #scan BLE devices. Only the hcitool command options with le prefix will work for BLE device
+$hcitool leinfo <MAC>
+
+$gattool -I
+[...][LE]> connect <MAC>
+connection successful
+[... MAC...>[LE] 
+$gatttool -b <MAC> -l  #Connect to a BLE device
+switch <MAC> with MAC of Mote and then play with gattool
+
+Note:
+- if connection problem.. try enable disable the BLE of VM from VM UI Device-->USB-->Lite on Technology Corp
+- OR do this..
+    $hciconfig hci0 down
+    $hciconfig hci0 up
