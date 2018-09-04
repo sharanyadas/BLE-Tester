@@ -11,13 +11,13 @@
 #import stuff for UI
 ##############
 #DEBUGGING NOTE :
-#    Occassionally that the hcitool, gatttool, bluetoothctl tools do not work and fail
-#    to connect. To fix that problem I could do the following things:
+#    Sometime I observed that hcitool, gatttool, bluetoothctl tools does not work and fail
+#    to connect! By searching internet I found some tricks that workd...
 #        1. From VM Menu toggle (unselect/select) Device-->USB-->Line on Technology 
-#        2. If #1 does not work... from the console I did the following:
+#        2. If #1 does not work... from console I did the following:
 #           $hciconfig hci0 down
 #           $hciconfig hci0 up
-#        3. When #2 also failed... I went to Windows bluetooth config and disabled/re-enabled it.
+#        3. When #2 also failed... I went to Windows bluetooth config and disabled/reenabled it.
 ####################################
 
 from Tkinter import *
@@ -45,17 +45,21 @@ import re
 kill = lambda process: process.kill()
 cmd = 'hcitool lescan'
 
-print "Starting hcitool lescan to discover all BLE devices..."
+print "Starting hcitool lescan for 30 sec to discover nearby BLE devices..."
 process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-time.sleep(15)
+time.sleep(30)
 os.kill(process.pid, signal.SIGINT)
 out = process.communicate()[0]
-#print out             #print what I discovered through lescan
+print out             #print what I discovered by lescan
 
 print "Searching for Mote devices (max 10) from discovered list ..."
 mote = []
 maclist = []
 rssi_arr = []
+#SSID_val = "1234567887654321"
+#password_val = "3030303030303030"
+SSID_val = StringVar()
+password_val = StringVar()
 for line in out.split('\n'):
     if 'Mote' in line:
         mote.append(line)
@@ -64,16 +68,16 @@ for line in out.split('\n'):
     if len(mote) > 10: # there may be hundereds of devices... testing for the first 10 discovred Mote
         break;
 
-######TEST WITHOUT MOTE ====== I NEED TO REMOVE THESE motes and hard coded macaddresses
-mote = ['00:07:80:39:77:EA  Petasense Mote 1   RSSI = ',
-        '00:07:80:39:77:EB  Petasense Mote 2   RSSI = ',
-        '00:07:80:39:77:EC  Petasense Mote 3   RSSI = ',
-        '00:07:80:39:77:ED  Petasense Mote 4   RSSI = ']
-maclist = ['00:07:80:39:77:EA',
-         '00:07:80:39:77:EB',
-         '00:07:80:39:77:EC',
-         '00:07:80:39:77:ED']
-rssi_arr = [200,200,200,200]  # Don't know rssi yet. Initialize with a high number 200
+######TEST WITHOUT MOTE ====== I NEED TO REMOVE THESE mote and maclist hard coding
+#mote = ['00:07:80:39:77:EA  Petasense Mote 1   RSSI = ',
+#       '00:07:80:39:77:EB  Petasense Mote 2   RSSI = ',
+#       '00:07:80:39:77:EC  Petasense Mote 3   RSSI = ',
+#       '00:07:80:39:77:ED  Petasense Mote 4   RSSI = ']
+#maclist = ['00:07:80:39:77:EA',
+#        '00:07:80:39:77:EB',
+#        '00:07:80:39:77:EC',
+#        '00:07:80:39:77:ED']
+#rssi_arr = [200,200,200,200]  # Don't know rssi yet. Initialize with a high number 200
 ###### I WILL REMOVE UPTO HERE
 
 ###############
@@ -96,10 +100,10 @@ for i, mac in enumerate(maclist):
      except pexpect.TIMEOUT:
            print "Oops! Could NOT get the RSSI for this MAC = ", mac
      ch.sendline('scan off')
-#ch.kill()   #Not sure if I need to kill the child process?
+#ch.kill()   #Not sure if I need to kill the child process? I will ask Simon later
 ch.sendline('exit')
 
-#print (mote)   #print stdout of proc1 to display all the Mote lines
+#print (mote)  #print stdout of proc1 to display all the Mote lines
 #print "rssi_arr : ", rssi_arr
 
 ##################################
@@ -108,7 +112,7 @@ ch.sendline('exit')
 
 # Create an array of radio buttons for all discovered devices
 
-rbuts_text = mote   #Assign the Lines read from hcitool cmd
+rbuts_text = mote    #Assign the Lines read from hcitool cmd
 rbuts = []
 chk_sel = IntVar()
 ix = 0
@@ -149,7 +153,7 @@ def connect_action():
          #print chdl.before
          #print chdl.after
    except pexpect.TIMEOUT:
-         print "    Oops! could not read using bluetoothctl..."
+         print "    Oops! could not reading using bluetoothctl..."
    chdl.sendline('exit')
    print "### Connecting using gatttool to the device...", maclist[ix], rssi_arr[ix] 
    try:
@@ -164,7 +168,6 @@ def connect_action():
    chdl1.sendline('exit')
 
 #This function will auto connect to least negetive RSSI device
-
 def auto_connect():
    global rssi_arr
    minrssi = min(rssi_arr)  #least integer value of RSSI
@@ -172,34 +175,67 @@ def auto_connect():
    minpos = rssi_arr.index(minrssi) # position of the minrssi
    #print " minrssi  minpos : ", minrssi, minpos
    print "\n#####  Auto connecting to the highest RSSI device with MAC and RSSI : ", maclist[minpos], rssi_arr[minpos]
-   print "   #####  Reading info using bluetoothctl "
-   try:
-        chdl=pexpect.spawn('bluetoothctl', timeout=60)
-        chdl.expect('#')
-        chdl.sendline('info ' + maclist[minpos])
-        chdl.expect(r"([a-z0-9]*-[a-z0-9]*-[a-z0-9]*-[a-z0-9]*-[a-z0-9]*)")
-        #print chdl.before
-        #print chdl.after
-   except pexpect.TIMEOUT:
-        print "       Oops! could not read using bluetoothctl..."
-   chdl.sendline('exit')
+#   print "   #####  Reading info using bluetoothctl "
+#   try:
+#        chdl=pexpect.spawn('bluetoothctl', timeout=60)
+#        chdl.expect('#')
+#        chdl.sendline('info ' + maclist[minpos])
+#        chdl.expect(r"([a-z0-9]*-[a-z0-9]*-[a-z0-9]*-[a-z0-9]*-[a-z0-9]*)")
+#        #print chdl.before
+#        #print chdl.after
+#   except pexpect.TIMEOUT:
+#        print "       Oops! could not reading using bluetoothctl..."
+#   chdl.sendline('exit')
    print "   #####  Connecting using gatttool... "
    try:
         ac_ch=pexpect.spawn('gatttool -I')
         ac_ch.expect('>') #Wait for [LE]> prompt
         ac_ch.sendline('connect ' + maclist[minpos])
         ac_ch.expect('Connection successful', timeout = 60)
-        print('#####  Auto Connection successful')
+        print('#####  Auto Connection successful for the device MAC = ', maclist[minpos])
         #print ac_ch.before
         #print ac_ch.after
    except pexpect.TIMEOUT:
-        print "       Oops! could not connect using gatttool..."
+        print ("       Oops! could not connect using gatttool for device MAC = ", maclist[minpos])
    ac_ch.sendline('exit')
+   print ("Exiting the gatttool.... ")
+
+
+#Set SSID and Password action function
+def set_ssid_pass():
+   global rssi_arr
+   global SSID_val
+   global password_val
+   SSID_val_read = SSID_val.get()
+   password_val_read = password_val.get()
+   minrssi = min(rssi_arr)  #least integer value of RSSI
+   #print "rssi_arr : ", rssi_arr
+   minpos = rssi_arr.index(minrssi) # position of the minrssi
+   print "   #####  Connecting again using gatttool as user wants to write SSID and Password... "
+   try:
+        ac_ch=pexpect.spawn('gatttool -I')
+        ac_ch.expect('>') #Wait for [LE]> prompt
+        ac_ch.sendline('connect ' + maclist[minpos])
+        ac_ch.expect('Connection successful', timeout = 60)
+        print('#####  Connection successful for the device MAC = ', maclist[minpos])
+        #gatttool connection successful.. write the UUID and password at handle 0x00015 and 0x00019 
+        ac_ch.sendline('char-write-req 0x0015 ' + SSID_val_read )
+        ac_ch.expect('Characteristic value was written successfully', timeout = 60)
+        print('#####  Wrote SSID successfully at handle 0x00015 ... SSID, MAC : ', SSID_val_read, maclist[minpos])
+        ac_ch.sendline('char-write-req 0x0015 ' + password_val_read )
+        ac_ch.expect('Characteristic value was written successfully', timeout = 60)
+        print('#####  Wrote Password successfully at handle 0x00019 ... Password, MAC : ', password_val_read, maclist[minpos])
+   except pexpect.TIMEOUT:
+        Label(root, text="Couldn't write the SSID and Password successfully :-(").pack()
+        print ("       Oops! could not connect or write using gatttool for device MAC = ", maclist[minpos])
+   ac_ch.sendline('exit')
+   Label(root, text="Successfully wrote the SSID and Password [it will not be persistent] :-) ").pack()
+   print ("Exiting the gatttool.... ")
 
 #Create buttons and list the discovered Mote devices and their MAC, RSSI etc
 print "Creating the main UI radio buttons and printing the Mote device name, MAC, RSSI"
 create_rbuts()
-deselect_all()
+deselect_all() #may be i don't need it
 
 Label(root, text=" \n\n").pack() #blank line
 Button(root, text = 'Connect to the selected Device MAC address',
@@ -207,21 +243,19 @@ Button(root, text = 'Connect to the selected Device MAC address',
        command=connect_action).pack()
 Label(root, text=" \n").pack() #blank line
 
+# Text box for Password
 Label(root, text="Password: ").pack()
-### Here I can send the SSID and Password to BLE device. But I need to know from Simon 
-### the exact handle i.e where to write those
-e1 = Entry(root)
+e1 = Entry(root, textvariable=password_val)
 e1.pack()
 
+# Text box for SSID
 Label(root, text="SSID: ").pack()
-### Here I can send the SSID and Password to BLE device. But I need to know from Simon 
-### the exact handle i.e where to write those
-e2 = Entry(root)
+e2 = Entry(root, textvariable=SSID_val)
 e2.pack()
 
-Button(root, text = 'Apply', bg="blue", fg="white", command=root.quit).pack()
-### Here I can send the SSID and Password to BLE device. But I need to know from Simon 
-### the exact handle i.e where to write those
+### Here I can send the SSID and Password to BLE device at handle 0x0015 and 0x0019
+Button(root, text = 'Apply', bg="blue", fg="white", command=set_ssid_pass).pack()
+
 Label(root, text=" \n\n").pack() #blank line
 
 Button(root, text='Quit', bg="red", fg="white", command=root.quit).pack()
@@ -229,4 +263,66 @@ Button(root, text='Quit', bg="red", fg="white", command=root.quit).pack()
 #Auto connect to the highest RSSI device i.e. least integer ivalue RSSI Mote dveice
 auto_connect()
 
+
 mainloop()
+
+'''
+##### 
+      Using gatttool -I when I connected to a Mote device 
+      and read all the handls + UUID from it.. I see these
+      following data. And I see that that UUID for handle
+      0x0015 and 0x0019 matches for the SSID and Password
+      UUID (whech I see when connectng to same device from 
+      LightBlue App
+##### 
+[00:07:80:39:77:EA][LE]> char-desc
+handle: 0x0001, uuid: 00002800-0000-1000-8000-00805f9b34fb
+handle: 0x0002, uuid: 00002803-0000-1000-8000-00805f9b34fb
+handle: 0x0003, uuid: 00002a00-0000-1000-8000-00805f9b34fb
+handle: 0x0004, uuid: 00002803-0000-1000-8000-00805f9b34fb
+handle: 0x0005, uuid: 00002a01-0000-1000-8000-00805f9b34fb
+handle: 0x0006, uuid: 00002800-0000-1000-8000-00805f9b34fb
+handle: 0x0007, uuid: 00002803-0000-1000-8000-00805f9b34fb
+handle: 0x0008, uuid: 1102cae9-0ea3-4a71-b61a-4b425def5123
+handle: 0x0009, uuid: 00002902-0000-1000-8000-00805f9b34fb
+handle: 0x000a, uuid: 00002901-0000-1000-8000-00805f9b34fb
+handle: 0x000b, uuid: 00002803-0000-1000-8000-00805f9b34fb
+handle: 0x000c, uuid: 0afd4f0c-0114-449a-b443-cf80ddeefd6d
+handle: 0x000d, uuid: 00002902-0000-1000-8000-00805f9b34fb
+handle: 0x000e, uuid: 00002901-0000-1000-8000-00805f9b34fb
+handle: 0x000f, uuid: 00002803-0000-1000-8000-00805f9b34fb
+handle: 0x0010, uuid: dfede86d-9abb-40ee-b2c4-903ac49c8c53
+handle: 0x0011, uuid: 00002902-0000-1000-8000-00805f9b34fb
+handle: 0x0012, uuid: 00002901-0000-1000-8000-00805f9b34fb
+handle: 0x0013, uuid: 00002800-0000-1000-8000-00805f9b34fb
+handle: 0x0014, uuid: 00002803-0000-1000-8000-00805f9b34fb
+
+SSID:
+handle: 0x0015, uuid: 22c0b6c4-e3d9-4b57-9803-d04c3a0a582e
+
+handle: 0x0016, uuid: 00002902-0000-1000-8000-00805f9b34fb
+handle: 0x0017, uuid: 00002901-0000-1000-8000-00805f9b34fb
+handle: 0x0018, uuid: 00002803-0000-1000-8000-00805f9b34fb
+
+Password:
+handle: 0x0019, uuid: 061ac5f9-89c8-41bd-be1b-7e7e4c955ab2
+
+handle: 0x001a, uuid: 00002902-0000-1000-8000-00805f9b34fb
+handle: 0x001b, uuid: 00002901-0000-1000-8000-00805f9b34fb
+handle: 0x001c, uuid: 00002800-0000-1000-8000-00805f9b34fb
+handle: 0x001d, uuid: 00002803-0000-1000-8000-00805f9b34fb
+handle: 0x001e, uuid: a257bb5c-aedb-44b3-85ff-1fdffe0cdbb2
+handle: 0x001f, uuid: 00002902-0000-1000-8000-00805f9b34fb
+handle: 0x0020, uuid: 00002901-0000-1000-8000-00805f9b34fb
+handle: 0x0021, uuid: 00002800-0000-1000-8000-00805f9b34fb
+handle: 0x0022, uuid: 00002803-0000-1000-8000-00805f9b34fb
+handle: 0x0023, uuid: 9b494502-71ac-4c76-87d2-58b800c3e10b
+handle: 0x0024, uuid: 00002902-0000-1000-8000-00805f9b34fb
+handle: 0x0025, uuid: 00002901-0000-1000-8000-00805f9b34fb
+handle: 0x0026, uuid: 00002800-0000-1000-8000-00805f9b34fb
+handle: 0x0027, uuid: 00002803-0000-1000-8000-00805f9b34fb
+handle: 0x0028, uuid: 92a47c66-5790-47ca-a1ac-45469119575a
+handle: 0x0029, uuid: 00002902-0000-1000-8000-00805f9b34fb
+handle: 0x002a, uuid: 00002901-0000-1000-8000-00805f9b34fb
+[00:07:80:39:77:EA][LE]
+'''
